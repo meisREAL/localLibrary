@@ -2,8 +2,7 @@ const Genre = require("../models/genre");
 const Book = require('../models/book')
 const async = require('async');
 const {body, validationResult} = require('express-validator');
-const req = require("express/lib/request");
-const res = require("express/lib/response");
+
 
 //* Display list of all Genre.
 exports.genre_list = function(req, res, next){
@@ -102,8 +101,14 @@ exports.genre_create_post = [
 ];
 
 //* Display Genre delete form on GET.
-exports.genre_delete_get = (req, res) => {
-    res.send("NOT IMPLEMENTED: Genre delete GET");
+exports.genre_delete_get = (req, res, next) => {
+    async.parallel(
+        {
+            genre(callback){
+                Genre.findById(req.params.id).exec(callback)
+            }
+        }
+    );
 };
 
 //* Handle Genre delete on POST.
