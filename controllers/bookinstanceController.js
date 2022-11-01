@@ -158,11 +158,92 @@ exports.bookinstance_delete_post = (req, res, next) => {
 };
 
 //* Display BookInstance update form on GET.
-exports.bookinstance_update_get = (req, res) => {
-    res.send("NOT IMPLEMENTED: BookInstance update GET");
+exports.bookinstance_update_get = (req, res, next) => {
+    async.parallel(
+        {
+            bookinstance(callback){
+                BookInstance.findById(req.params.id)
+                    .populate('book')
+                    .exec(callback)
+            },
+            books(callback){
+                Book.find(callback)
+            }
+        },
+        (err, results) => {
+            if(err){
+                return next(err);
+            }
+            if(results.bookinstance == null){
+                const err = new Error('Book instance not found');
+                err.status = 404;
+                return next(err);
+            }
+            res.render('bookinstance_form', {
+                title: 'Update Book Instance',
+                book_list: results.books,
+                selected_book: results.bookinstance.book._id,
+                bookinstance: results.bookinstance,
+            });
+        }
+    );
 };
 
 //* Handle BookInstance update on POST.
-exports.bookinstance_update_post = (req, res) => {
-    res.send("NOT IMPLEMENTED: BookInstance update POST");
-};
+exports.bookinstance_update_post = [
+    // Validate and sanitize fields
+    body('book', 'Book must not be empty.')
+        .trim()
+        .isLength({min: 1})
+        .escape(),
+    body('imprint', 'Imprint must not be empty')
+        .trim()
+        .isLength({min: 1})
+        .escape(),
+    body('status')
+        .escape(),
+    body('due_back', 'Invalid date')
+        .optional({checkFalsy: true})
+        .isISO8601()
+        .toDate(),
+
+    // Process request after validation and sanitization.
+    (req, res, nest) => {
+        // Extract validation errors from request
+        const errors = validationResult(req);
+
+        // Create a Book Instance object with escaped/trimmed data and old id.
+        const bookinstance = new BookInstance({
+            book: req.body.book,
+            imprint: req.body.imprint,
+            status: req.body.status,
+            due_back: req.body.due_back,
+            _id: req.params.id,
+        });
+        if(!errors.isEmpty()){
+            //There are errors. Render form again with sanitized values/error messages
+            Book.find({}, 'title').exec((err, books) =>{
+                if(err){
+                    return next(err);
+                }
+                //successful, so render
+                res.render('bookinstance_form', {
+                    title: "Update BookInstance",
+                    book_list: books,
+                    selected_book: bookinstance.book._id,
+                    errors: errors.array(),
+                    bookinstance: bookinstance,
+                });
+            });
+            return;
+        }
+
+        BookInstance.findByIdAndUpdate(req.params.id, bookinstance, {}, 
+            (err, thebookinstance) =>{
+                if(err){
+                    return next(err);
+                }
+                res.redirect(thebookinstance.url);
+        })
+    }
+];
